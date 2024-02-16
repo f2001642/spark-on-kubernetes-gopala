@@ -60,20 +60,25 @@ sysctl net.bridge.bridge-nf-call-iptables net.bridge.bridge-nf-call-ip6tables ne
 ```
 
 ```shell
-# check and enable firewall if not already
+# update hostname
+
+sudo hostnamectl set-hostname <master-node | worker-node-1 | worker-node2 | ...>
+echo $(hostname -i)
+echo $(hostname)
+sudo -- sh -c "echo $(hostname -i) $(hostname) >> /etc/hosts"
+cat /etc/hosts
+```
+
+```shell
+# enable firewall
 
 systemctl status firewalld
 systemctl start firewalld
 ```
 
 ```shell
-# update hostname and firewall - master node ONLY***
-
-sudo hostnamectl set-hostname master-node
-echo $(hostname -i)
-echo $(hostname)
-sudo -- sh -c "echo $(hostname -i) $(hostname) >> /etc/hosts"
-cat /etc/hosts
+# update firewall
+# *** master node ONLY ***
 
 sudo firewall-cmd --permanent --add-port=6443/tcp
 sudo firewall-cmd --permanent --add-port=2379-2380/tcp
@@ -81,19 +86,17 @@ sudo firewall-cmd --permanent --add-port=10250/tcp
 sudo firewall-cmd --permanent --add-port=10251/tcp
 sudo firewall-cmd --permanent --add-port=10252/tcp
 sudo firewall-cmd --permanent --add-port=10255/tcp
+sudo firewall-cmd --permanent --add-port=10257/tcp
+sudo firewall-cmd --permanent --add-port=10259/tcp
 sudo firewall-cmd --reload
 ```
 
 ```shell
-#  update hostname and firewall - worker node ONLY***
-
-sudo hostnamectl set-hostname worker-node-1
-echo $(hostname -i)
-echo $(hostname)
-sudo -- sh -c "echo $(hostname -i) $(hostname) >> /etc/hosts"
-cat /etc/hosts
+#  update firewall
+# *** worker node ONLY ***
 
 sudo firewall-cmd --permanent --add-port=10250/tcp
+sudo firewall-cmd --permanent --add-port=30000-32767/tcp
 sudo firewall-cmd --permanent --add-port=10251/tcp
 sudo firewall-cmd --permanent --add-port=10255/tcp
 sudo firewall-cmd --reload
@@ -129,6 +132,7 @@ sudo yum install -y kubelet kubectl kubeadm
 
 Initialise control plane (master node)
 ```shell
+# *** master node ONLY ***
 
 sudo kubeadm init --pod-network-cidr 10.244.0.0/16 --apiserver-cert-extra-sans=<EXTERNAL_IP>
 sudo systemctl enable kubelet && sudo systemctl status kubelet
@@ -139,21 +143,22 @@ sudo systemctl enable kubelet && sudo systemctl status kubelet
 
 Export kube config
 ```shell
+# if current user:
 mkdir -p $HOME/.kube
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# else if root user
 export KUBECONFIG=/etc/kubernetes/admin.conf
+
+# verify connectivity
+sudo kubectl get pods --all-namespaces
 ```
 
 Deploy pod network
 ```shell
-# if current user:
 curl https://raw.githubusercontent.com/projectcalico/calico/v3.25.1/manifests/calico.yaml -O
 sudo kubectl apply -f calico.yaml
-sudo kubectl get nodes
-
-# else if root user
-sudo kubectl get pods --all-namespaces
 ```
 
 Join worker node(s)
@@ -178,9 +183,8 @@ mv linux-amd64/helm /usr/local/bin/helm
 Install spark-on-k8s-operator via helm
 ```shell
 /usr/local/bin/helm repo add spark-operator https://googlecloudplatform.github.io/spark-on-k8s-operator
-/usr/local/bin/helm install my-release spark-operator/spark-operator --namespace spark-operator --create-namespace --set sparkJobNamespace=default
-# /usr/local/bin/helm install my-release spark-operator/spark-operator --namespace spark-operator --create-namespace --set sparkJobNamespace=default --set image.tag=v1beta2-1.2.0-3.0.0
-# /usr/local/bin/helm install my-release spark-operator/spark-operator --namespace spark-operator --create-namespace
+/usr/local/bin/helm install my-release spark-operator/spark-operator
+# /usr/local/bin/helm install my-release spark-operator/spark-operator --namespace spark-operator --create-namespace --set sparkJobNamespace=default
 
 # add service account
 kubectl create serviceaccount spark
