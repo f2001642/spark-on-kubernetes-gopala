@@ -4,9 +4,9 @@ This is a guide to create kubernetes cluster, install spark operator, run and mo
 
 ## Table of Contents  
 - [Spark on Kubernetes](#spark-on-kubernetes-gopala) 
-  - [Prepare VMs](#1-prepare-vms)  
-  - [Create Kubernetes Cluster](#2-create-kubernetes-cluster)  
-  - [Install Spark](#3-deploy-spark)  
+  - [Preparing VMs](#1-prepare-vms)  
+  - [Creating Kubernetes Cluster](#2-create-kubernetes-cluster)  
+  - [Installing Spark](#3-deploy-spark)  
   - [Running Spark Applications](#4-run-spark-applications)  
   - [Monitoring Spark Applications](#5-monitoring-spark-applications)   
   - [Troubleshooting](#6-troubleshooting) 
