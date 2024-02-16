@@ -16,12 +16,10 @@ This is a guide to create kubernetes cluster, install spark operator, run and mo
 - Add Inbound port rules required
   - Control plane ports: 8080,6443,10250,10259,10257,2379-2380
   - Worker node ports: 10250,30000-32767
-4. Run the below commands to prepare the VMs for installing Kubernetes cluster
+- Log in to each VM and run the following commands:
    
-Note: Created my VMs using VMSS so the VNET is same and Inbound rules applied for all in one go.
 
-Log in to each VM and run the following commands -
-
+Log in to each VM and run the following commands
 ```shell
 cat /etc/fstab
 sudo sed -i '/swap/d' /etc/fstab
@@ -54,13 +52,13 @@ sysctl net.bridge.bridge-nf-call-iptables net.bridge.bridge-nf-call-ip6tables ne
 ```
 
 check and enable firewall if not already
-```
+```shell
 systemctl status firewalld
 systemctl start firewalld
 ```
 
 update hostname and firewall - master node ONLY
-```
+```shell
 sudo hostnamectl set-hostname master-node
 echo $(hostname -i)
 echo $(hostname)
@@ -77,7 +75,7 @@ sudo firewall-cmd --reload
 ```
 
 update hostname and firewall - worker node ONLY
-```
+```shell
 sudo hostnamectl set-hostname worker-node-1
 echo $(hostname -i)
 echo $(hostname)
@@ -91,7 +89,7 @@ sudo firewall-cmd --reload
 ```    
 
 install containerd
-```
+```shell
 
 sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 sudo yum install -y yum-utils containerd.io && rm -I /etc/containerd/config.toml
@@ -100,7 +98,7 @@ sudo systemctl status containerd
 ```
 
 install kubeadmn
-```
+```shell
 
 # <file>
 cat <<EOF | sudo tee /etc/yum.repos.d/kubernetes.repo
@@ -120,7 +118,7 @@ sudo yum install -y kubelet kubectl kubeadm
 ## Create Kubernetes Cluster
 
 initialise control plane (master node)
-```
+```shell
 
 sudo kubeadm init --pod-network-cidr 10.244.0.0/16 --apiserver-cert-extra-sans=EXTERNAL_IP
   # eg: sudo kubeadm init --pod-network-cidr 10.244.0.0/16 --apiserver-cert-extra-sans=172.166.192.249
@@ -131,7 +129,7 @@ sudo systemctl enable kubelet && sudo systemctl status kubelet
 ```
 
 export kube config
-```
+```shell
 mkdir -p $HOME/.kube
 sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
 sudo chown $(id -u):$(id -g) $HOME/.kube/config
@@ -140,7 +138,7 @@ export KUBECONFIG=/etc/kubernetes/admin.conf
 
 deploy pod network
 
-```
+```shell
 # if current user:
 curl https://raw.githubusercontent.com/projectcalico/calico/v3.25.1/manifests/calico.yaml -O
 sudo kubectl apply -f calico.yaml
@@ -151,7 +149,7 @@ sudo kubectl get pods --all-namespaces
 ```
 
 Join worker node(s)
-```
+```shell
 kubeadm join 10.0.0.5:6443 --token wwjc51.p84bdemib58f1oij \
 	--discovery-token-ca-cert-hash sha256:c29c1e58c15ddce711a286614bb672c5ad73fa0ba49f8e47c4661e070e8b40b8
 
@@ -164,14 +162,14 @@ sudo kubectl get pods --all-namespaces
 ## Deploy Spark
 
 install helm
-```
+```shell
 wget https://get.helm.sh/helm-v3.14.1-linux-amd64.tar.gz
 tar -zxvf helm-v3.14.1-linux-amd64.tar.gz
 mv linux-amd64/helm /usr/local/bin/helm
 ```
 
 install spark-on-k8s-operator via helm
-```
+```shell
 /usr/local/bin/helm repo add spark-operator https://googlecloudplatform.github.io/spark-on-k8s-operator
 /usr/local/bin/helm install my-release spark-operator/spark-operator --namespace spark-operator --create-namespace --set sparkJobNamespace=default
 # /usr/local/bin/helm install my-release spark-operator/spark-operator --namespace spark-operator --create-namespace --set sparkJobNamespace=default --set image.tag=v1beta2-1.2.0-3.0.0
@@ -184,11 +182,14 @@ kubectl create clusterrolebinding spark-role --clusterrole=edit --serviceaccount
 ```
 
 ## Run Spark Applications
-```
+```shell
 vim SparkPiApplication.yaml
 kubectl apply -f SparkPiApplication.yaml
 ```
-
+## Commands
+```shell
+kubectl config set-context --current --namespace default
+```
 ## Troubleshooting
 check spark applications status
 ```shell
@@ -199,7 +200,7 @@ NAME       STATUS   ATTEMPTS   START                  FINISH       AGE
 spark-pi   FAILED              2024-02-15T23:43:55Z   <no value>   33s
 ```
 
-check a failed spark application logs
+check a failed spark application
 ```shell
 kubectl get sparkapplications spark-pi -o=yaml
 
@@ -260,6 +261,18 @@ kubectl describe pod spark-pi-driver
 # sample driver pod 2 - affinity checks
 #  Warning  FailedScheduling  24m (x35 over 3h14m)  default-scheduler  0/2 nodes are available: 1 node(s) didn't match Pod's node affinity/selector, 1 node(s) had untolerated taint {node-role.kubernetes.io/control-plane: }. preemption: 0/2 # nodes are available: 2 Preemption is not helpful for scheduling..
 ```
+
+spark pod logs not available -
+```shell
+Error from server: Get "https://10.0.0.4:10250/containerLogs/default/spark-pi-driver/spark-kubernetes-driver": dial tcp 10.0.0.4:10250: connect: no route to host
+sudo firewall-cmd --list-all  # you should see that port `10250` is updated
+
+# port is not in firewall settings
+sudo firewall-cmd --add-port=10250/tcp --permanent
+sudo firewall-cmd --reload
+sudo firewall-cmd --list-all  # you should see that port `10250` is updated
+```
+
 check pod logs 
 ```shell
 kubectl logs spark-pi-driver
@@ -273,22 +286,9 @@ check node selector, taints etc
 kubectl describe node worker-node
 ```
 
-
+use master node as worker node
 ```
-## use master node as worker node too
-
-kubectl taint node master-node node-role.kubernetes.io/control-plane:NoSchedule-
-## update node selector from spark application 
 kubectl taint node master-node node-role.kubernetes.io/control-plane:NoSchedule-
 ```
 
-# spark logs not available:
-`Error from server: Get "https://10.0.0.4:10250/containerLogs/default/spark-pi-driver/spark-kubernetes-driver": dial tcp 10.0.0.4:10250: connect: no route to host`
-```
-sudo firewall-cmd --add-port=10250/tcp --permanent
-sudo firewall-cmd --reload
-sudo firewall-cmd --list-all  # you should see that port `10250` is updated
-```
-
-E0216 11:39:03.426045      10 reflector.go:140] pkg/mod/k8s.io/client-go@v0.25.3/tools/cache/reflector.go:169: Failed to watch *v1beta2.ScheduledSparkApplication: failed to list *v1beta2.ScheduledSparkApplication: scheduledsparkapplications.sparkoperator.k8s.io is forbidden: User "system:serviceaccount:default:spark" cannot list resource "scheduledsparkapplications" in API group "sparkoperator.k8s.io" at the cluster scope
 
