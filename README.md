@@ -1,4 +1,4 @@
-# spark-on-kubernetes-gopala
+# Spark on Kubernetes Setup
 
 This is a guide to create kubernetes cluster, install spark operator, run and monitor spark applications.
 
