@@ -105,6 +105,7 @@ sudo firewall-cmd --reload
 Install containerd
 ```shell
 
+sudo yum install yum-utils
 sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 sudo yum install -y yum-utils containerd.io && rm -I /etc/containerd/config.toml
 sudo systemctl enable containerd && sudo systemctl start containerd
@@ -176,20 +177,20 @@ sudo kubectl get pods --all-namespaces
 Install helm
 ```shell
 wget https://get.helm.sh/helm-v3.14.1-linux-amd64.tar.gz
+# curl -O https://get.helm.sh/helm-v3.14.1-linux-amd64.tar.gz
 tar -zxvf helm-v3.14.1-linux-amd64.tar.gz
 mv linux-amd64/helm /usr/local/bin/helm
 ```
 
 Install spark-on-k8s-operator via helm
 ```shell
-/usr/local/bin/helm repo add spark-operator https://googlecloudplatform.github.io/spark-on-k8s-operator
-/usr/local/bin/helm install my-release spark-operator/spark-operator
-# /usr/local/bin/helm install my-release spark-operator/spark-operator --namespace spark-operator --create-namespace --set sparkJobNamespace=default
 
-# add service account
-kubectl create serviceaccount spark
-kubectl create clusterrolebinding spark-role --clusterrole=edit --serviceaccount=default:spark --namespace=default
-# Note: make sure to add this spark configuration in manifest file: --conf spark.kubernetes.authenticate.driver.serviceAccountName=spark
+# create service account
+vim spark-operator-rbac.yaml
+kubectl apply -f spark-operator-rbac.yaml
+
+/usr/local/bin/helm repo add spark-operator https://googlecloudplatform.github.io/spark-on-k8s-operator
+/usr/local/bin/helm upgrade -i my-release spark-operator/spark-operator --set serviceAccounts.spark.create=false --set serviceAccounts.sparkoperator.create=false -v=10
 ```
 
 ## 4. Run Spark Applications
@@ -204,7 +205,7 @@ kubectl apply -f SparkPiApplication.yaml
 
 Access Spark UI from local machine
 ```shell
-kubectl port-forward <driver-pod-name> 4040:4040</driver-pod-name>
+kubectl port-forward <driver-pod-name> 4040:4040
 You can then open up the Spark UI at http://localhost:4040/
 
 # Note: for this step install kubectl on your local machine, copy ~/.kube/config file and update the server url with pubilc IP 
